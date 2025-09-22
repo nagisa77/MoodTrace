@@ -9,6 +9,7 @@ import { RouterLink, RouterView } from 'vue-router'
       <nav class="app-nav">
         <RouterLink class="nav-link" to="/">日志列表</RouterLink>
         <RouterLink class="nav-link" to="/new">新建日志</RouterLink>
+        <RouterLink class="nav-link" to="/settings">设置</RouterLink>
       </nav>
     </header>
 

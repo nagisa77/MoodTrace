@@ -35,6 +35,14 @@ const isAnalyzing = ref(false)
 const analysis = ref('')
 const analysisError = ref('')
 
+const bodyFeelings = computed(
+  () => (log.value?.feelings?.body ? [...log.value.feelings.body] : [])
+)
+const mindFeelings = computed(
+  () => (log.value?.feelings?.mind ? [...log.value.feelings.mind] : [])
+)
+const legacyFeelings = computed(() => log.value?.feelings?.legacy || '')
+
 const handleDelete = () => {
   if (!log.value) return
   const ok = window.confirm('确定要删除这篇日志吗？删除后无法恢复。')
@@ -52,7 +60,7 @@ const startAnalysis = async () => {
     analysis.value = await analyzeLog(log.value)
   } catch (error) {
     console.error(error)
-    analysisError.value = '分析出现问题，请稍后再试。'
+    analysisError.value = error?.message || '分析出现问题，请稍后再试。'
   } finally {
     isAnalyzing.value = false
   }
@@ -81,8 +89,27 @@ const startAnalysis = async () => {
             <dd>{{ log.event }}</dd>
           </div>
           <div>
-            <dt>感受</dt>
-            <dd>{{ log.feelings }}</dd>
+            <dt>身体感受</dt>
+            <dd>
+              <ul v-if="bodyFeelings.length" class="feeling-tags">
+                <li v-for="item in bodyFeelings" :key="item">{{ item }}</li>
+              </ul>
+              <span v-else class="muted-text">未选择</span>
+            </dd>
+          </div>
+          <div>
+            <dt>心理感受</dt>
+            <dd>
+              <ul v-if="mindFeelings.length" class="feeling-tags">
+                <li v-for="item in mindFeelings" :key="item">{{ item }}</li>
+              </ul>
+              <span v-else-if="legacyFeelings" class="legacy-feelings">{{ legacyFeelings }}</span>
+              <span v-else class="muted-text">未选择</span>
+            </dd>
+          </div>
+          <div v-if="legacyFeelings && mindFeelings.length">
+            <dt>其他感受记录</dt>
+            <dd>{{ legacyFeelings }}</dd>
           </div>
           <div>
             <dt>想法</dt>

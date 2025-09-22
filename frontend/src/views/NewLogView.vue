@@ -12,10 +12,49 @@ const defaultDate = () => {
   return now.toISOString().slice(0, 16)
 }
 
+const bodyFeelingOptions = [
+  '呼吸急促',
+  '晕眩',
+  '反胃',
+  '全身轻松',
+  '胃痛',
+  '头痛',
+  '胸口像被石头压着',
+  '发抖',
+  '轻盈',
+  '肚子疼',
+  '手脚冰冷',
+  '心砰砰跳',
+  '起鸡皮疙瘩',
+  '冒冷汗',
+]
+
+const mindFeelingOptions = [
+  '悲伤',
+  '喜悦',
+  '头脑清醒',
+  '展开',
+  '愤怒',
+  '感激',
+  '紧张',
+  '宁静',
+  '大脑空白',
+  '焦虑',
+  '受鼓舞',
+  '懊悔',
+  '热情',
+  '失望',
+  '自豪',
+]
+
+const sortSelected = (selected, options) =>
+  options.filter((option) => selected.includes(option))
+
 const form = reactive({
   createdAt: defaultDate(),
   event: '',
-  feelings: '',
+  bodyFeelings: [],
+  mindFeelings: [],
   thoughts: '',
   behaviors: '',
   consequences: '',
@@ -44,8 +83,14 @@ const handleSubmit = async () => {
   if (isSubmitting.value) return
 
   error.value = ''
-  if (!form.event || !form.feelings || !form.thoughts || !form.behaviors || !form.consequences) {
-    error.value = '请完整填写所有字段。'
+  if (
+    !form.event ||
+    (!form.bodyFeelings.length && !form.mindFeelings.length) ||
+    !form.thoughts ||
+    !form.behaviors ||
+    !form.consequences
+  ) {
+    error.value = '请完整填写所有字段，并至少选择一种感受。'
     return
   }
 
@@ -55,7 +100,10 @@ const handleSubmit = async () => {
       id: createId(),
       createdAt: toIsoString(form.createdAt),
       event: form.event.trim(),
-      feelings: form.feelings.trim(),
+      feelings: {
+        body: sortSelected(form.bodyFeelings, bodyFeelingOptions),
+        mind: sortSelected(form.mindFeelings, mindFeelingOptions),
+      },
       thoughts: form.thoughts.trim(),
       behaviors: form.behaviors.trim(),
       consequences: form.consequences.trim(),
@@ -93,10 +141,30 @@ const handleCancel = () => {
         <textarea v-model.trim="form.event" rows="3" placeholder="描述发生了什么" required></textarea>
       </label>
 
-      <label class="form-field">
+      <div class="form-field emotion-field">
         <span>感受</span>
-        <textarea v-model.trim="form.feelings" rows="3" placeholder="当时体验到的情绪" required></textarea>
-      </label>
+        <p class="form-hint">区分身体与心理的反应，可以更细致地观察自己的体验。</p>
+
+        <div class="emotion-group">
+          <h3>身体感受</h3>
+          <div class="emotion-options">
+            <label v-for="option in bodyFeelingOptions" :key="option" class="emotion-option">
+              <input v-model="form.bodyFeelings" type="checkbox" :value="option" />
+              <span>{{ option }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="emotion-group">
+          <h3>心理感受</h3>
+          <div class="emotion-options">
+            <label v-for="option in mindFeelingOptions" :key="option" class="emotion-option">
+              <input v-model="form.mindFeelings" type="checkbox" :value="option" />
+              <span>{{ option }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
 
       <label class="form-field">
         <span>想法</span>

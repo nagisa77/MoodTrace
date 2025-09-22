@@ -17,14 +17,20 @@ const timeFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit',
 })
 
-const summarizeEmotion = (text) => {
-  if (!text) return '未填写情绪'
+const extractLegacyEmotion = (text) => {
+  if (!text) return ''
   const parts = text
     .replace(/。|！|？|\n/g, ' ')
     .split(/[、，,；;\s]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-  return parts[0] || '未填写情绪'
+  return parts[0] || ''
+}
+
+const summarizeEmotion = (log) => {
+  if (!log || !log.feelings) return '未选择感受'
+  const { mind = [], body = [], legacy = '' } = log.feelings
+  return mind[0] || body[0] || extractLegacyEmotion(legacy) || '未选择感受'
 }
 
 const summarizeEvent = (text) => {
@@ -59,7 +65,7 @@ const formatDate = (iso) => {
         <RouterLink :to="{ name: 'log-detail', params: { id: log.id } }">
           <div class="log-card__header">
             <span class="log-card__date">{{ formatDate(log.createdAt) }}</span>
-            <span class="log-card__emotion">{{ summarizeEmotion(log.feelings) }}</span>
+            <span class="log-card__emotion">{{ summarizeEmotion(log) }}</span>
           </div>
           <p class="log-card__event">{{ summarizeEvent(log.event) }}</p>
         </RouterLink>

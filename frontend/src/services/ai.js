@@ -1,31 +1,133 @@
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+import { useSettings } from '../composables/useSettings'
 
-const trimText = (text, limit = 80) => {
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
+
+const truncate = (text, limit = 240) => {
   if (!text) return ''
   return text.length > limit ? `${text.slice(0, limit)}…` : text
 }
 
+const listToText = (values) =>
+  Array.isArray(values)
+    ? values
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+        .join('、')
+    : ''
+
+const normalizeFeelingsForPrompt = (feelings) => {
+  if (!feelings || typeof feelings !== 'object') {
+    return {
+      body: '',
+      mind: '',
+      legacy: '',
+    }
+  }
+
+  const body = listToText(feelings.body)
+  const mind = listToText(feelings.mind)
+  const legacy = typeof feelings.legacy === 'string' ? feelings.legacy : ''
+
+  return {
+    body,
+    mind,
+    legacy,
+  }
+}
+
+const buildMessages = (log) => {
+  const feelings = normalizeFeelingsForPrompt(log.feelings)
+
+  const fields = [
+    `事件：${truncate(log.event || '未记录')}`,
+    `身体感受：${truncate(feelings.body || '未选择')}`,
+    `心理感受：${truncate(feelings.mind || feelings.legacy || '未选择')}`,
+    `想法：${truncate(log.thoughts || '未记录')}`,
+    `行为：${truncate(log.behaviors || '未记录')}`,
+    `后果：${truncate(log.consequences || '未记录')}`,
+  ]
+
+  if (feelings.legacy && feelings.mind) {
+    fields.splice(3, 0, `其他感受记录：${truncate(feelings.legacy)}`)
+  }
+
+  const userContent = [
+    '以下是一篇情绪日志，请以中文进行共情式的反馈：',
+    ...fields,
+    '',
+    '请遵循以下原则：',
+    '1. 以温柔、非评判性的语气，先回应对方的感受与处境。',
+    '2. 提供 2-3 个启发式的问题，帮助对方进一步观察自己的需要或信念。',
+    '3. 如果合适，可以给出一条简单的自我照顾或下一步行动建议。',
+    '4. 全文保持在 4 段以内，并以换行分段。',
+  ].join('\n')
+
+  return [
+    {
+      role: 'system',
+      content:
+        '你是一位擅长情绪支持的中文心理咨询助理，会以共情与好奇回应来访者，避免医学诊断与绝对化语言。',
+    },
+    {
+      role: 'user',
+      content: userContent,
+    },
+  ]
+}
+
 export async function analyzeLog(log) {
-  await wait(600 + Math.random() * 600)
+  const { settings } = useSettings()
+  const apiKey = settings.value.openaiApiKey?.trim()
 
-  const event = trimText(log.event, 100)
-  const feelings = trimText(log.feelings, 100)
-  const thoughts = trimText(log.thoughts, 100)
-  const behaviors = trimText(log.behaviors, 100)
-  const consequences = trimText(log.consequences, 100)
+  if (!apiKey) {
+    const error = new Error('请先在设置中填写 OpenAI API Key。')
+    error.code = 'missing_api_key'
+    throw error
+  }
 
-  const questions = [
-    `当你回顾「${event || '这个情境'}」时，哪些感受最想被看见？`,
-    `在那些想法（例如「${thoughts || '...'}」）之下，是否藏着某些更深的期待或担心？`,
-    `如果再次面对类似的经历，你希望自己的行为或选择（比如「${behaviors || '...'}」）有哪些不同？`,
-    `这些后果（例如「${consequences || '...'}」）带给你什么提醒？`
-  ]
+  const messages = buildMessages(log)
 
-  const reflection = [
-    `我听见你提到在「${event || '这个事件'}」中经历了「${feelings || '复杂的情绪'}」。`,
-    `这些情绪似乎和你的想法「${thoughts || '...'}」彼此呼应，影响到你当时的反应。`,
-    `我们可以慢慢探索，当感受到这些情绪时，你最需要的支持或资源是什么。`
-  ]
+  try {
+    const response = await fetch(OPENAI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages,
+        temperature: 0.8,
+        max_tokens: 600,
+      }),
+    })
 
-  return `${reflection.join('\n')}\n\n可以试着想一想：\n- ${questions[0]}\n- ${questions[1]}\n- ${questions[2]}\n- ${questions[3]}\n\n如果愿意，你也可以把新的观察写进下一篇日志里，我们再继续一起整理。`
+    if (!response.ok) {
+      let detail = '请求 OpenAI 接口时出现问题。'
+      try {
+        const errorPayload = await response.json()
+        detail = errorPayload?.error?.message || detail
+      } catch (parseError) {
+        // ignore parse errors
+      }
+
+      const error = new Error(detail)
+      error.status = response.status
+      throw error
+    }
+
+    const data = await response.json()
+    const content = data?.choices?.[0]?.message?.content?.trim()
+
+    if (!content) {
+      throw new Error('AI 没有返回内容，请稍后重试。')
+    }
+
+    return content
+  } catch (error) {
+    if (error.name === 'TypeError') {
+      throw new Error('无法连接到 OpenAI 服务，请检查网络或稍后再试。')
+    }
+    throw error
+  }
 }
